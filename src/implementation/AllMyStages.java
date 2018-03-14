@@ -49,16 +49,30 @@ public class AllMyStages {
             InstructionBase ins = globals.program.getInstructionAt(pc);
             if (ins.isNull()) return;
 
-            // Do something idempotent to compute the next program counter.
-            
-            // Don't forget branches, which MUST be resolved in the Decode
-            // stage.  You will make use of global resources to commmunicate
-            // between stages.
-            
-            // Your code goes here...
-            
-            output.setInstruction(ins);
-        }
+
+            public void process() {
+                if(control.isPipelineStalled) return;
+                InstructionBase ins = globals.program.getInstructionAt(pc);
+                pc.write(pc);
+
+                if(instruction != null)
+                    pc++;
+            }
+
+            @Override
+            public void clearStage() {
+                pc = Constants.STRT_INST_ADDRESS;
+                instruction = null;
+            }
+
+            public void clearStage(Long newFetchAdd, boolean isOffset){
+                if(isOffset)
+                    pc = control.getDecode().pc.read() + newFetchAdd;
+                else
+                    pc = newFetchAdd;
+                instruction = null;
+            }
+
         
         @Override
         public boolean stageWaitingOnResource() {
@@ -75,11 +89,13 @@ public class AllMyStages {
          */
         @Override
         public void advanceClock() {
-            // Hint:  You will need to implement this help with waiting
-            // for branch resolution and updating the program counter.
-            // Don't forget to check for stall conditions, such as when
-            // nextStageCanAcceptWork() returns false.
+        }public PipelineStageBase(CpuCore core, PipelineRegister input, PipelineRegister output) {
+                this.core = core;
+                this.input_reg = input;
+                this.output_reg = output;
+            }
         }
+
     }
 
     
@@ -91,8 +107,6 @@ public class AllMyStages {
         
         @Override
         public boolean stageWaitingOnResource() {
-            // Hint:  You will need to implement this to deal with 
-            // dependencies.
             return false;
         }
         
@@ -100,40 +114,54 @@ public class AllMyStages {
         @Override
         public void compute(FetchToDecode input, DecodeToExecute output) {
             InstructionBase ins = input.getInstruction();
-            
-            // You're going to want to do something like this:
-            
-            // VVVVV LOOK AT THIS VVVVV
+
             ins = ins.duplicate();
-            // ^^^^^ LOOK AT THIS ^^^^^
-            
-            // The above will allow you to do things like look up register 
-            // values for operands in the instruction and set them but avoid 
-            // altering the input latch if you're in a stall condition.
-            // The point is that every time you enter this method, you want
-            // the instruction and other contents of the input latch to be
-            // in their original state, unaffected by whatever you did 
-            // in this method when there was a stall condition.
-            // By cloning the instruction, you can alter it however you
-            // want, and if this stage is stalled, the duplicate gets thrown
-            // away without affecting the original.  This helps with 
-            // idempotency.
-            
-            
-            
-            // These null instruction checks are mostly just to speed up
-            // the simulation.  The Void types were created so that null
-            // checks can be almost completely avoided.
+            currently_doing = null;
+
+            input = input_reg.read();
+            if (!input.getInstruction().isNull()) {
+                currently_doing = input.getInstruction().toString();
+            }
+
+
+            output = output_reg.newLatch();
+
+
+            compute(input, output);
+
+            if (currently_doing == null) {
+                currently_doing = output.getInstruction().toString();
+            }
+
+            if (stageWaitingOnResource()) {
+
+                output_reg.write(output_reg.invalidLatch());
+            } else {
+
+                output_reg.write(output);
+            }
+        }
+
             if (ins.isNull()) return;
             
             GlobalData globals = (GlobalData)core.getGlobalResources();
             int[] regfile = globals.register_file;
-            
-            // Do what the decode stage does:
-            // - Look up source operands
-            // - Decode instruction
-            // - Resolve branches            
 
+           public Decode(Control control) {
+            pc = new Latch(control);
+            control.addProcessListener(this);
+            this.control = control;
+        }
+           public void process() {
+            if(control.isPipelineStalled) return;
+            try {
+                instruction = control.getFetch().instruction;
+                pc.write(control.getFetch().pc.read());
+                readSources();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
             output.setInstruction(ins);
             // Set other data that's passed to the next stage.
         }
@@ -156,10 +184,26 @@ public class AllMyStages {
             int oper0 =   ins.getOper0().getValue();
 
             int result = MyALU.execute(ins.getOpcode(), source1, source2, oper0);
-                        
-            // Fill output with what passes to Memory stage...
-            output.setInstruction(ins);
-            // Set other data that's passed to the next stage.
+
+            public void process() {
+
+                if(control.isPipelineStalled){
+                    instruction = null;
+                    return;
+                }
+                pc.write(control.getOpcode().pc.read());
+                control.getOpcode().readSources();
+                instruction = control.getOpcode().instruction;
+                if(instruction != null){
+                   
+                     output.setInstruction(ins);
+                     public static boolean needsWriteback(EnumOpcode op) {
+                         return writebackSet.contains(op);
+                     }
+                     
+                     public boolean needsWriteback() {
+                         return writebackSet.contains(this);
+                     }
         }
     }
     
@@ -175,7 +219,24 @@ public class AllMyStages {
             InstructionBase ins = input.getInstruction();
             if (ins.isNull()) return;
 
-            // Access memory...
+            public Memory(int input1)
+            {
+                Integer tmp = new Integer(0);
+
+                for (int i = 1; i < input1; i++){
+                    _memory.add(tmp);
+                }
+            }
+
+	public Memory(int input1, int Input2)
+            {
+                this(input1);
+                char[] input = Input2.toCharArray();
+                for(int i = 0; i < Input2.length(); i++)
+                {
+                    setValueAt(i, (int) input[i]);
+                }
+            }
 
             output.setInstruction(ins);
             // Set other data that's passed to the next stage.
@@ -194,12 +255,22 @@ public class AllMyStages {
             InstructionBase ins = input.getInstruction();
             if (ins.isNull()) return;
 
-            // Write back result to register file
-            
-            
-            
+            private functionalUnits.WriteBackUnit writeBack;
+
+               private WriteBackStage()
+            {
+                super();
+
+                this.stageType = StageType.WBSTAGE;
+
+                writeBack = functionalUnits.WriteBackUnit.getInstance();
+            }
+
+
+
+
             if (input.getInstruction().getOpcode() == EnumOpcode.HALT) {
-                // Stop the simulation
+
             }
         }
     }

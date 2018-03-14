@@ -1,8 +1,4 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
+
 package implementation;
 
 import utilitytypes.EnumOpcode;
@@ -18,10 +14,51 @@ public class MyALU {
     static int execute(EnumOpcode opcode, int input1, int input2, int oper0) {
         int result = 0;
         
-        // Implement code here that performs appropriate computations for
-        // any instruction that requires an ALU operation.  See
-        // EnumOpcode.
+        switch(opcode)
+        {
+        case ADD:
+			result = (input1 + input2);
+			break;
+		case SUB:
+			result = (input1 - input2);
+			break;
+		case MOVC:
+			result = (input1);
+			break;
+		case MULS:
+			result = (input1*input2);
+			break;
+		case AND:
+			result = (input1 & input2);
+			break;
+		case OR:
+			result = (input1 | input2);
+			break;
+		case XOR:
+			result = (input1 ^ input2);
+			break;
+		case LOAD:
+			if(opcode == null){
+				result = (input1 + input2);
+			} 
+			else
+			{								
+				result = (input1+ oper0);
+			}
+		
+		case SHL:
+			result = input1 << input2;
+			break;
+		case LSR:
+			result = (input1 >> input2);
+              break;
+		case HALT:
+			break;
+	
+        }
         
         return result;
-    }    
-}
+    }   
+    }
+
+
